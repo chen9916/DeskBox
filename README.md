@@ -187,6 +187,10 @@ Settings pages fold low-frequency options into expandable accordions, and the bu
 | --- | --- |
 | ![DeskBox Feature widget settings in English](docs/images/screenshots/en-us/功能格子.png) | ![DeskBox Shortcuts and interaction settings in English](docs/images/screenshots/en-us/快捷与交互.png) |
 
+## Agent API (localhost)
+
+DeskBox can expose a loopback HTTP API so an AI agent can create, move, resize, and delete file widgets and stacks without using the GUI. See [AGENT_API.md](AGENT_API.md) for routes, persistence map, and example `curl` commands. Default: `http://127.0.0.1:17865` (disable with `DESKBOX_AGENT_API=0`).
+
 ## Local-first data and privacy
 
 DeskBox does not require an account or cloud synchronization. Widget configuration, todos, quick notes, search history, layouts, and managed files are stored locally; the optional WebDAV backup, when you configure it, only ever contacts your own server.

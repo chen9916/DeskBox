@@ -11,6 +11,7 @@ using DeskBox.Helpers;
 using DeskBox.Models;
 using DeskBox.Platform;
 using DeskBox.Services;
+using DeskBox.Services.AgentApi;
 using DeskBox.Views;
 // App carries DI instance members named Services and AppUpdateService, which
 // shadow the DeskBox.Services.AppUpdateService class name inside this file;
@@ -277,6 +278,8 @@ public partial class App : Application
         _everythingSearchService?.CurrentSnapshot.State == EverythingConnectionState.Connected;
     internal int SearchMetaCacheCount => _fileMetaService?.CachedIconCount ?? 0;
     public WidgetManager? WidgetManager { get; private set; }
+
+    private AgentApiServer? _agentApiServer;
     public ResizeGuideOverlayService ResizeGuideOverlay { get; private set; } = null!;
     public NativeAppNotificationService? NativeNotificationService => _nativeNotificationService;
     public DisplayAreaWatcherService? DisplayAreaWatcher => _displayAreaWatcher;
@@ -1526,6 +1529,8 @@ public partial class App : Application
                     WidgetLayerService.EndStartupDesktopLayerAttachmentDeferral();
                 }
             }
+
+            RunOptionalStartupStep("agent-api", StartAgentApiServer);
 
             if (startupDesktopLayerReadinessTask is not null)
             {
@@ -4626,6 +4631,36 @@ public partial class App : Application
         }
     }
 
+
+    private void StartAgentApiServer()
+    {
+        if (!AgentApiServer.IsEnabledByEnvironment())
+        {
+            Log("[AgentApi] Disabled via DESKBOX_AGENT_API.");
+            return;
+        }
+
+        if (_agentApiServer is not null)
+        {
+            return;
+        }
+
+        int port = AgentApiServer.ResolvePort();
+        try
+        {
+            _agentApiServer = new AgentApiServer(
+                new AgentApiBackend(() => WidgetManager),
+                port);
+            _agentApiServer.Start();
+        }
+        catch (Exception ex)
+        {
+            _agentApiServer = null;
+            Log($"[AgentApi] Failed to start on 127.0.0.1:{port}: {ex}");
+            RecordStartupDegradation("agent-api", ex.ToString());
+        }
+    }
+
     private async Task HandleRecoveryOfferFreshStartAsync(bool relaxDefaultWidgetPolicy)
     {
         try
@@ -6495,6 +6530,14 @@ public partial class App : Application
                 shutdownGrace),
             // Hooks must be removed while their owning tray window still exists.
             ShutdownStep.Sync("global-hotkey", () => { GlobalHotkeyService?.Dispose(); GlobalHotkeyService = null; }),
+            new("agent-api", async () =>
+            {
+                if (_agentApiServer is not null)
+                {
+                    await _agentApiServer.DisposeAsync();
+                    _agentApiServer = null;
+                }
+            }),
             ShutdownStep.Sync("widgets", () => WidgetManager?.CloseAll()),
             ShutdownStep.Sync("desktop-organization-window", () => { _desktopOrganizationWindow?.CloseForShutdown(); _desktopOrganizationWindow = null; }),
             ShutdownStep.Sync("settings-window", () => { _settingsWindow?.CloseForShutdown(); _settingsWindow = null; }),
