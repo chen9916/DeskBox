@@ -189,7 +189,38 @@ Settings pages fold low-frequency options into expandable accordions, and the bu
 
 ## Agent API (localhost)
 
-DeskBox can expose a loopback HTTP API so an AI agent can create, move, resize, and delete file widgets and stacks without using the GUI. See [AGENT_API.md](AGENT_API.md) for routes, persistence map, and example `curl` commands. Default: `http://127.0.0.1:17865` (disable with `DESKBOX_AGENT_API=0`).
+DeskBox can expose a **loopback-only HTTP API** so an AI agent (or script) can create, move, resize, and delete **file widgets** and **file stacks** without touching the GUI. The listener runs **in-process with DeskBox on Windows** — the app must be running; there is no separate server binary. Non-loopback clients get HTTP 403.
+
+| | |
+| --- | --- |
+| **Base URL** | `http://127.0.0.1:17865` |
+| **Disable** | env `DESKBOX_AGENT_API=0` (also `false` / `off` / `disabled`) |
+| **Port** | env `DESKBOX_AGENT_API_PORT` (default `17865`) |
+| **JSON** | camelCase request and response bodies |
+| **Persistence** | same `widget-layout.json` paths as the GUI (`WidgetManager` / `WidgetViewModel`) |
+
+### Routes
+
+| Method | Path | Result |
+| --- | --- | --- |
+| `GET` | `/health` | `{ "status":"ok", "service":"deskbox-agent", "port":17865 }` |
+| `GET` | `/v1/widgets` | `{ "widgets":[ … ] }` — file widgets only |
+| `POST` | `/v1/widgets` | create managed or folder-mapped widget → `201` + widget |
+| `PATCH` | `/v1/widgets/{id}` | move / resize / rename → updated widget |
+| `DELETE` | `/v1/widgets/{id}` | remove widget → `204` (managed folder contents kept) |
+| `GET` | `/v1/widgets/{id}/stacks` | `{ "widgetId", "stacks":[ … ] }` |
+| `POST` | `/v1/widgets/{id}/stacks` | manual stack from ≥2 `memberPaths` → `201` |
+| `PATCH` | `/v1/widgets/{id}/stacks/{stackKey}` | rename / expand / `orderIndex` reorder |
+| `DELETE` | `/v1/widgets/{id}/stacks/{stackKey}` | dissolve (or disable auto-stack) → `204` |
+
+**Widget JSON** includes `id`, `name`, `kind`, `x`/`y` (physical screen px), `width`/`height` (logical), `folderPath`, visibility/lock flags. **Create body:** optional `name`, `folderPath`, `x`, `y`, `width`, `height`. **Patch body:** any subset of `x`, `y`, `width`, `height`, `name`. **Stack create:** `{ "memberPaths":["…","…"], "name"? }`. **Stack patch:** `{ "name"?, "expanded"?, "orderIndex"? }` — stacks have no desktop bounds; reorder is inside the widget. Errors return `{ "error", "detail"? }`. Stack ops need the file-widget host loaded (HTTP 409 otherwise).
+
+```bash
+curl -s http://127.0.0.1:17865/health
+curl -s -X POST http://127.0.0.1:17865/v1/widgets -H "Content-Type: application/json" -d '{"name":"Agent Box","x":200,"y":120,"width":320,"height":420}'
+```
+
+Full layout map, more curls, and agent notes: [AGENT_API.md](AGENT_API.md).
 
 ## Local-first data and privacy
 
